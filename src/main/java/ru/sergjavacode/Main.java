@@ -11,21 +11,6 @@ public class Main {
 
     public static void main(String[] args) {
         List<Thread> threadList = new ArrayList<>();
-        IntStream.range(0, 1000)
-                .forEach(x -> {
-                    Thread newThread = new Thread(() ->
-                    {
-                        String s = generateRoute("RLRFR", 100);
-                        int numberOfRepetitionsR = (int) s.chars().filter(cr -> cr == 'R').count();
-                        synchronized (sizeToFreq) {
-                            addCountRepetitionsR(numberOfRepetitionsR);
-                            sizeToFreq.notify();
-                        }
-                    });
-                    newThread.start();
-                    threadList.add(newThread);
-                });
-
         Thread countMaxEntry = new Thread(() ->
         {
             while (!Thread.interrupted()) {
@@ -35,16 +20,33 @@ public class Main {
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
-                    System.out.println(sizeToFreq.entrySet()
+                    System.out.println("Промежуточный подсчет максимума: " + sizeToFreq.entrySet()
                             .stream()
                             .max(Map.Entry.comparingByValue())
-                            .get().toString());
+                            .get().toString() + "\n");
                 }
 
             }
         });
         countMaxEntry.start();
         threadList.add(countMaxEntry);
+        IntStream.range(0, 1000)
+                .forEach(x -> {
+                    Thread newThread = new Thread(() ->
+                    {
+                        String s = generateRoute("RLRFR", 100);
+                        int numberOfRepetitionsR = (int) s.chars().filter(cr -> cr == 'R').count();
+                        addCountRepetitionsR(numberOfRepetitionsR);
+                        try {
+                            Thread.sleep(11);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                        countMaxEntry.interrupt();
+                    });
+                    newThread.start();
+                    threadList.add(newThread);
+                });
 
         int xx = sizeToFreq.values().stream().mapToInt(x -> x).sum();
         System.out.println("Проверка. Сумма значений в мапе (должна быть равна 1000): " + xx);
@@ -74,14 +76,17 @@ public class Main {
                 });
     }
 
-    public static synchronized void addCountRepetitionsR(int numberOfRepetitionsR) {
+    public static void addCountRepetitionsR(int numberOfRepetitionsR) {
         int value;
-        if (sizeToFreq.containsKey(numberOfRepetitionsR)) {
-            value = sizeToFreq.get(numberOfRepetitionsR);
-            value += 1;
-            sizeToFreq.put(numberOfRepetitionsR, value);
-        } else {
-            sizeToFreq.put(numberOfRepetitionsR, 1);
+        synchronized (sizeToFreq) {
+            if (sizeToFreq.containsKey(numberOfRepetitionsR)) {
+                value = sizeToFreq.get(numberOfRepetitionsR);
+                value += 1;
+                sizeToFreq.put(numberOfRepetitionsR, value);
+            } else {
+                sizeToFreq.put(numberOfRepetitionsR, 1);
+            }
+            sizeToFreq.notify();
         }
     }
 
