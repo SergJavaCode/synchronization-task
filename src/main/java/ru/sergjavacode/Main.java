@@ -10,19 +10,42 @@ public class Main {
     public static final Map<Integer, Integer> sizeToFreq = new HashMap<>();
 
     public static void main(String[] args) {
-
-        ExecutorService executorService = Executors.newFixedThreadPool(1000);
+        List<Thread> threadList = new ArrayList<>();
         IntStream.range(0, 1000)
                 .forEach(x -> {
-                    Runnable runnable = () -> {
+                    Thread newThread = new Thread(() ->
+                    {
                         String s = generateRoute("RLRFR", 100);
                         int numberOfRepetitionsR = (int) s.chars().filter(cr -> cr == 'R').count();
-                        addCountRepetitionsR(numberOfRepetitionsR);
-                    };
-                    executorService.execute(runnable);
+                        synchronized (sizeToFreq) {
+                            addCountRepetitionsR(numberOfRepetitionsR);
+                            sizeToFreq.notify();
+                        }
+                    });
+                    newThread.start();
+                    threadList.add(newThread);
                 });
 
-        executorService.shutdown();
+        Thread countMaxEntry = new Thread(() ->
+        {
+            while (!Thread.interrupted()) {
+                synchronized (sizeToFreq) {
+                    try {
+                        sizeToFreq.wait();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    System.out.println(sizeToFreq.entrySet()
+                            .stream()
+                            .max(Map.Entry.comparingByValue())
+                            .get().toString());
+                }
+
+            }
+        });
+        countMaxEntry.start();
+        threadList.add(countMaxEntry);
+
         int xx = sizeToFreq.values().stream().mapToInt(x -> x).sum();
         System.out.println("Проверка. Сумма значений в мапе (должна быть равна 1000): " + xx);
         String maxKey = sizeToFreq.entrySet()
